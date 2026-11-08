@@ -1,0 +1,8 @@
+{
+  "method": "otsu",
+  "n_valid": 159524,
+  "separation": 0.8844,
+  "threshold_raw": 0.16236,
+  "threshold": 0.16236,
+  "clamped": false
+}

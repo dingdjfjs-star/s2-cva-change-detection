@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentinel-2 时序变化检测流水线 · CVA 自研实现</title>
+<style>
+  :root{
+    --paper:#faf7f0; --ink:#2b2b2b; --red:#c23b22; --blue:#4a6fa5;
+    --green:#2e6e3a; --gold:#b8860b; --line:#d8d2c4; --soft:#6b6455;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  body{
+    background:var(--paper); color:var(--ink);
+    font-family:"Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif;
+    line-height:1.75; font-size:15.5px;
+  }
+  .wrap{max-width:1060px; margin:0 auto; padding:0 20px 80px}
+  header{border-bottom:3px double var(--ink); padding:56px 0 30px; margin-bottom:34px}
+  .kicker{letter-spacing:.35em; font-size:12px; color:var(--red); font-weight:700}
+  h1{font-size:34px; line-height:1.3; margin:10px 0 6px; font-weight:800}
+  .sub{color:var(--soft); font-size:15px}
+  .badges{margin-top:16px}
+  .badge{
+    display:inline-block; border:1px solid var(--ink); border-radius:3px;
+    padding:2px 10px; margin:3px 6px 3px 0; font-size:12.5px; background:#fff;
+  }
+  .badge.b{border-color:var(--blue); color:var(--blue)}
+  .badge.r{border-color:var(--red); color:var(--red)}
+  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin:34px 0 10px}
+  .stat{
+    background:#fff; border:1px solid var(--line); border-top:3px solid var(--red);
+    padding:16px 18px; text-align:center;
+  }
+  .stat:nth-child(2){border-top-color:var(--blue)}
+  .stat:nth-child(3){border-top-color:var(--green)}
+  .stat:nth-child(4){border-top-color:var(--gold)}
+  .stat .n{font-size:30px; font-weight:800; letter-spacing:.02em}
+  .stat .t{font-size:12.5px; color:var(--soft); margin-top:2px}
+  h2{
+    font-size:21px; margin:52px 0 16px; padding-left:12px;
+    border-left:5px solid var(--red); font-weight:800;
+  }
+  h3{font-size:16.5px; margin:20px 0 8px}
+  p{margin:8px 0}
+  .flow{display:flex; flex-wrap:wrap; gap:6px; align-items:stretch; margin:18px 0}
+  .step{
+    background:#fff; border:1px solid var(--ink); padding:9px 13px; font-size:13px;
+    display:flex; flex-direction:column; justify-content:center; flex:1 1 0; min-width:120px;
+  }
+  .step b{font-size:13.5px}
+  .step span{color:var(--soft); font-size:11.5px}
+  .arrow{align-self:center; color:var(--red); font-weight:800; font-size:16px}
+  .star{color:var(--red); font-weight:700}
+  figure{
+    background:#fff; border:1px solid var(--line); margin:22px 0; padding:16px 16px 12px;
+  }
+  figure img{width:100%; display:block; border:1px solid var(--line)}
+  figcaption{font-size:13px; color:var(--soft); margin-top:10px}
+  figcaption b{color:var(--ink)}
+  table{width:100%; border-collapse:collapse; background:#fff; font-size:14px; margin:14px 0}
+  th,td{border:1px solid var(--line); padding:8px 12px; text-align:left}
+  th{background:#f1ecdf; font-weight:700}
+  td.num{text-align:right; font-variant-numeric:tabular-nums}
+  .note{
+    background:#fdf6e9; border:1px solid var(--gold); padding:14px 18px;
+    font-size:14px; margin:16px 0;
+  }
+  .note b{color:var(--gold)}
+  code{
+    font-family:Consolas,"Courier New",monospace; font-size:13px;
+    background:#f1ecdf; padding:1px 6px; border-radius:3px;
+  }
+  pre{
+    background:#2b2b2b; color:#f0ead8; padding:16px 18px; overflow-x:auto;
+    font-size:13px; line-height:1.6; margin:14px 0;
+  }
+  pre code{background:none; color:inherit; padding:0}
+  ul{margin:8px 0 8px 22px}
+  li{margin:5px 0}
+  .cta{margin-top:26px}
+  .btn{
+    display:inline-block; background:var(--ink); color:var(--paper); text-decoration:none;
+    padding:10px 22px; font-size:14px; margin:4px 10px 4px 0; border-radius:3px;
+  }
+  .btn.ghost{background:transparent; color:var(--ink); border:1px solid var(--ink)}
+  footer{
+    border-top:1px solid var(--line); margin-top:60px; padding-top:18px;
+    font-size:12.5px; color:var(--soft);
+  }
+  @media (max-width:760px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    h1{font-size:26px}
+    .flow{flex-direction:column}
+    .arrow{transform:rotate(90deg); align-self:center}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">遥感作品集 · REMOTE SENSING PORTFOLIO</div>
+  <h1>Sentinel-2 时序土地覆被变化检测流水线</h1>
+  <div class="sub">CVA 变化向量分析自研实现 · 去云 → 年度合成 → 检测 → 伪变化过滤 → 图斑/转移矩阵 → 报表图件</div>
+  <div class="badges">
+    <span class="badge">Python 3.13</span>
+    <span class="badge">rasterio</span>
+    <span class="badge">xarray</span>
+    <span class="badge">scikit-learn</span>
+    <span class="badge b">核心算法全自研 · 零变化检测库</span>
+    <span class="badge r">带真值评估 · seed 可复现</span>
+    <span class="badge">33 项自动化测试全绿</span>
+  </div>
+</header>
+
+<div class="stats">
+  <div class="stat"><div class="n">98.7%</div><div class="t">变化检测召回率</div></div>
+  <div class="stat"><div class="n">90.3%</div><div class="t">精确率（过滤后）</div></div>
+  <div class="stat"><div class="n">94.3%</div><div class="t">F1 分数</div></div>
+  <div class="stat"><div class="n">5 / 5</div><div class="t">植入事件全部检出（96.9~100%）</div></div>
+</div>
+
+<h2>一、流水线一览</h2>
+<p>基于 Sentinel-2 双年度时序（每 10 天一景 × 4 波段 @10m）的土地覆被变化检测完整闭环。
+<b>未调用任何现成变化检测封装库</b>——CVA、Otsu 阈值、连通域标记（Union-Find）、二值形态学、
+Sobel/局部标准差纹理、medoid 合成、转移矩阵分解均为手写实现，可逐行讲解。</p>
+
+<div class="flow">
+  <div class="step"><b>去云</b><span>SCL 掩膜 + 2px 膨胀<br>规则云分数兜底</span></div>
+  <div class="arrow">→</div>
+  <div class="step"><b>年度合成</b><span>生长季窗口<br>medoid 最优像元</span></div>
+  <div class="arrow">→</div>
+  <div class="step"><b>辐射归一化</b><span>PIF 迭代回归<br>R²≈0.99</span></div>
+  <div class="arrow">→</div>
+  <div class="step"><b><span class="star">CVA 检测 ★</span></b><span>‖ΔX‖ 模长 + 方向<br>纯 numpy 自研</span></div>
+  <div class="arrow">→</div>
+  <div class="step"><b>阈值分割</b><span>自研 Otsu<br>三策略可切换</span></div>
+  <div class="arrow">→</div>
+  <div class="step"><b>伪变化过滤</b><span>形态学 + 四规则<br>图斑 15 → 8</span></div>
+  <div class="arrow">→</div>
+  <div class="step"><b>图斑 / 矩阵</b><span>GeoJSON 矢量<br>净/交换变化分解</span></div>
+</div>
+
+<div class="note"><b>关键工程结论：</b>全年 medoid 合成会让水稻在物候态之间跳变，耕→耕伪变化幅度
+与真实变化同量级（阈值无解）；切换生长季窗口后未变化像元 P99 从 0.19 降到 0.10，
+同一套算法精确率从 24% 升到 90%+ ——<b>伪变化治理的大头在合成环节，而不是过滤环节</b>。</div>
+
+<h2>二、示例结果图</h2>
+
+<figure>
+  <img src="outputs/figures/fig1_overview.png" alt="总体概览" loading="lazy">
+  <figcaption><b>图 1 · 总体概览。</b>左上/中上：2023 与 2024 年度 medoid 合成（假彩色 NIR-R-G，
+  可见北部采伐迹地、水库东侧围垦、新建厂房）；右上：CVA 变化幅度 ‖ΔX‖；左下：幅度直方图与 Otsu 阈值（0.162）；
+  中下/右下：阈值分割原始变化（8.88%，含配准残差条带）与伪变化过滤后（7.47%）对比。</figcaption>
+</figure>
+
+<figure>
+  <img src="outputs/figures/fig2_change_distribution.png" alt="变化分布图" loading="lazy">
+  <figcaption><b>图 2 · 变化分布图（按转移类型着色）。</b>水体→耕地 33.0 ha（水库围垦）、林地→裸地 26.1 ha（采伐）、
+  草地→耕地 19.3 ha（开垦）、耕地→裸地 18.7 ha（撂荒）、耕地→建设用地 12.9 ha（厂房）；
+  建设用地→建设用地 9.5 ha 为刻意保留的配准残差残留，用于展示过滤体系的真实上限。</figcaption>
+</figure>
+
+<figure>
+  <img src="outputs/figures/fig3_transition_matrix.png" alt="转移矩阵" loading="lazy">
+  <figcaption><b>图 3 · 土地利用转移矩阵与变化分解。</b>左：全域转移矩阵热力图（ha，对角线为未变化）；
+  右：逐类损失/增益/净变化/交换变化。耕地净变化仅 +23.4 ha 而交换变化高达 88.5 ha——
+  只看净变化会严重低估真实扰动强度（Pontius 交换变化分解）。</figcaption>
+</figure>
+
+<figure>
+  <img src="outputs/figures/fig4_pseudo_filter.png" alt="伪变化过滤" loading="lazy">
+  <figcaption><b>图 4 · 伪变化过滤三联图。</b>左：原始 vs 过滤后（红=剔除 3,181 px，蓝=保留）；
+  中：图斑面积分布（过滤前红阶梯线 vs 过滤后绿色填充，面积阈值 0.06 ha）；
+  右：各阶段剔除贡献——形态学开闭剥除条带 2,186 px，四条规则剔除 7 图斑/74 px。</figcaption>
+</figure>
+
+<figure>
+  <img src="outputs/figures/fig5_change_vectors.png" alt="变化向量方向分析" loading="lazy">
+  <figcaption><b>图 5 · 变化向量方向分析。</b>左：各转移类型的平均变化向量 ΔX（方向指纹）——
+  水体→耕地呈 NIR/NDVI 大幅上升，耕地→建设用地呈 NIR 下降 + 可见光上升，物理意义清晰可解释；
+  右：各类型 CVA 幅度箱线图。</figcaption>
+</figure>
+
+<h2>三、方法要点</h2>
+
+<h3>3.1 medoid 年度合成（而不是均值/中位数）</h3>
+<p>把一年内有效观测视为光谱空间点集，取距逐波段中位数欧氏距离最近的<b>真实观测</b>：
+m<sub>b</sub> = median<sub>t</sub> X<sub>t,b</sub>，t* = argmin<sub>t</sub> Σ<sub>b</sub>(X<sub>t,b</sub> − m<sub>b</sub>)²。
+medoid 输出的像元光谱自洽（NDVI 与红光关系不被破坏）、对云残留离群稳健、隐式落在生长旺季。
+生长季窗口（DOY 150–260）进一步保证两年 medoid 落在同一物候平台上，年际可比。</p>
+
+<h3>3.2 CVA 变化向量分析（自研核心）</h3>
+<p>逐像元构造变化向量 <b>ΔX = X₂ − X₁ ∈ R<sup>C</sup></b>：
+模长 ‖ΔX‖ = √(Σ<sub>c</sub> w<sub>c</sub>·Δb<sub>c</sub>²) 度量"变没变、多剧烈"，
+方向 ΔX/‖ΔX‖ 回答"怎么变"。CVA 不预设变化类型——任何方向的光谱变化都体现在模长上，
+检测（阈值）与定性（方向 + 分类 from→to）解耦，互为校核。</p>
+
+<h3>3.3 伪变化过滤的分层设计</h3>
+<ul>
+  <li><b>形态学开运算</b>：剥除配准残差的 1~2px 边缘条带（本场景占伪变化像元 97%）；</li>
+  <li><b>R1 面积</b> ≥6px（600 m²）治椒盐噪声；<b>R2 空间一致性</b>（邻域同类占比 ≥0.55）治孤立碎斑；</li>
+  <li><b>R3 最小实心宽度</b>：图斑须含 3×3 实心核——<b>不受面积豁免</b>，1px×300px 的条带再长也不可能是可信地类转换；</li>
+  <li><b>R4 纹理</b>：图斑内 NIR 局部 σ ≤0.06，治高纹理边缘噪声；大图斑豁免。</li>
+</ul>
+
+<h3>3.4 转移矩阵与交换变化</h3>
+<p>随机森林（4 波段 + NDVI + 亮度，OOB 0.988/0.985）输出两期类别图 → 转移矩阵按
+Pontius 口径分解：净变化 Net = |终−初|，<b>交换变化 Swap = 2·min(损失, 增益)</b>——
+A 处耕地变林地、B 处林地变耕地时净变化近零而扰动是双份，只看面积对比会严重低估。</p>
+
+<h2>四、精度评估（对照模拟真值）</h2>
+<table>
+  <tr><th>评估项</th><th>结果</th></tr>
+  <tr><td>像元级召回率 / 精确率 / F1</td><td class="num">98.7% / 90.3% / 94.3%</td></tr>
+  <tr><td>林地→裸地（采伐，25.6 ha）</td><td class="num">召回 99.0%</td></tr>
+  <tr><td>耕地→建设用地（厂房，12.8 ha）</td><td class="num">召回 96.9%</td></tr>
+  <tr><td>水体→耕地（围垦，33.0 ha）</td><td class="num">召回 100%</td></tr>
+  <tr><td>草地→耕地（开垦，19.2 ha）</td><td class="num">召回 99.1%</td></tr>
+  <tr><td>耕地→裸地（撂荒，18.7 ha）</td><td class="num">召回 97.2%</td></tr>
+  <tr><td>随机森林 OOB（2023 / 2024）</td><td class="num">0.988 / 0.985</td></tr>
+  <tr><td>变化区 from/to 与真值一致率</td><td class="num">99% / 95%</td></tr>
+</table>
+<p style="font-size:13px;color:var(--soft)">演示数据为物理可解释的合成 Sentinel-2 时序（seed=20260829 逐位可复现）：
+含植被物候轨迹、稻田泡田期、逐时相大气差异、云/云影/卷云、物候年际抖动、土壤湿度漂移、1px 配准残差，
+以及 5 处已知真值变化事件。真实数据接入方式见仓库 README 第 7 节。</p>
+
+<h2>五、优点与局限</h2>
+<ul>
+  <li><b>优点</b>：核心算法全自研可逐行讲解；清单驱动的数据接入（真实数据只需生成 manifest）；
+    NaN 语义贯穿防 nodata 伪装；真值可评估、参数可归因；33 项测试含端到端召回门槛。</li>
+  <li><b>局限</b>：配准残差未在流水线内处理（生产应先精配准）；双时相 CVA 回答不了"何时变"；
+    4 波段无 SWIR 时建设用地/云影区分能力有限——这些在 README §5 都有交代与改进方向。</li>
+</ul>
+
+<div class="cta">
+  <a class="btn" href="https://github.com/dingdjfjs-star/s2-cva-change-detection">GitHub 仓库（完整代码）</a>
+  <a class="btn ghost" href="outputs/report.md">完整统计报表 report.md</a>
+  <a class="btn ghost" href="README.md">项目 README（原理/话术）</a>
+</div>
+
+<footer>
+  Sentinel-2 CVA Change Detection Pipeline · Python + rasterio + xarray + scikit-learn ·
+  CVA/Otsu/连通域/形态学/medoid 均为自研实现 · seed=20260829 逐位可复现
+</footer>
+
+</div>
+</body>
+</html>

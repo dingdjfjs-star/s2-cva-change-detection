@@ -1,0 +1,8 @@
+# Sentinel-2 CVA 时序变化检测流水线依赖
+# 环境：已验证 Python 3.13.5（Anaconda base, E:\Ana）
+numpy>=2.0
+pandas>=2.2
+matplotlib>=3.10
+scikit-learn>=1.6
+xarray>=2025.4
+rasterio>=1.5
