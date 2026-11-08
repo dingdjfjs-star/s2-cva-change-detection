@@ -1,5 +1,10 @@
 # Sentinel-2 时序土地覆被变化检测流水线（CVA 自研实现）
 
+> **在线展示：https://dingdjfjs-star.github.io/s2-cva-change-detection/ ·
+> 仓库：https://github.com/dingdjfjs-star/s2-cva-change-detection**
+> （本仓库由 `tools/prepare_deploy.py` 生成部署拷贝后经 api.github.com 通道发布；
+> `data/` 模拟影像与 `outputs/rasters/` 中间栅格不入库，运行 `scripts/run_demo.py --force` 可重新生成）
+
 基于 **Python + rasterio + xarray + scikit-learn** 的 Sentinel-2 时序变化检测完整流水线：
 影像去云 → 年度最优值合成 → 相对辐射归一化 → **CVA 变化向量分析（核心算法纯手写）** →
 阈值分割 → 伪变化过滤 → 变化栅格/矢量图斑 → 土地利用转移矩阵 → 统计报表与结果图。
@@ -26,6 +31,10 @@ E:\Ana\python.exe test\test_pipeline.py
 # 接入真实数据
 E:\Ana\python.exe tools\build_manifest.py --dir D:\s2\scene --out manifest.json --bands B02,B03,B04,B08
 E:\Ana\python.exe scripts\run_pipeline.py --config config.json
+
+# 部署/更新线上展示页（写好 index.html 后）
+E:\Ana\python.exe tools\prepare_deploy.py        # 生成部署拷贝 ../s2-cva-change-detection-site
+# 再用 github-pages-deploy 技能的 deploy-pages.js 发布该目录
 ```
 
 演示数据是**物理可解释的合成 Sentinel-2 时序**（`tools/simulate_s2.py`，seed=20260829 可复现）：
